@@ -62,6 +62,12 @@ for (csv in fs) {
 
 
 
+```{r - to-do}
+```
+  [] deal with multiple coder's input, select whose? and select `Consensus`
+
+
+
 ```{r - pre-processing }
 dt <- dfs %>%
   dplyr::rename('id' = 'Covidence #') %>%
@@ -71,7 +77,7 @@ dt <- dfs %>%
 
 dt_ <- dt %>%
   # arrange(desc(date)) %>%
-  dplyr::distinct(id, .keep_all = T) %>%
+  dplyr::distinct(id, Reviewer, .keep_all = T) %>%
   
   ## - remove text within parenthesis 
   dplyr::mutate(
@@ -103,8 +109,11 @@ dt_err <- dt_ %>%
   # dplyr::filter(str_detect(Type, fixed('Virtual wood', ignore_case = T))) %>% # ''
   # dplyr::filter(str_detect(Type, fixed('Ecosystem services', ignore_case = T))) %>% 
   # dplyr::filter(str_detect(Type, fixed('Policies', ignore_case = T))) %>% ## #267 by Nick
-  dplyr::filter(str_detect(Type, fixed('Cultural practices', ignore_case = T))) %>% ## #93 by Nick
+  # dplyr::filter(str_detect(Type, fixed('Cultural practices', ignore_case = T))) %>% ## #93 by Nick
+  # dplyr::filter(str_detect(Type, fixed('Seafood', ignore_case = T))) %>% ##
+  dplyr::filter(str_detect(Type, fixed('Nitrogen', ignore_case = T))) %>% ## Nitrogen
   # dplyr::filter(str_detect(Levels, fixed('ecoregion', ignore_case = T))) %>% 
+  # dplyr::filter(str_detect(Levels, fixed('Internationl', ignore_case = T))) %>% ## 
   # dplyr::filter(is.na(`Data availability`)) %>% 
   ## Policies
   as.data.frame()
@@ -249,8 +258,9 @@ dt.bymhi.cl <- dt.bymhi %>%
     
     Type = ifelse(Type %in% c('Land requisition'), 'transfer ownership and use of land', Type),
     Type = ifelse(Type %in% c('Virtual nitrogen', 'Virtual phosphorus'), 'Virtual N/P', Type),
-    Type = ifelse(Type %in% c('Carbon'), 'Pollutants/waste', Type),
+    Type = ifelse(Type %in% c('Seafood footprint', 'Virtual energy'), 'Virtual EF (other)', Type),
     Type = Hmisc::capitalize(Type),
+    Type = ifelse(Type %in% c('Carbon', 'Nitrogen'), 'Pollutants/waste', Type),
     
     type_top = case_when(
       str_detect(Type, regex('virtual|footprint', ignore_case=TRUE)) ~ 'Virtual Flows',
@@ -268,8 +278,8 @@ dt.bymhi.cl <- dt.bymhi %>%
     Type = ifelse(Type %in% c('Transfer ownership and use of land'), 'Land deals', Type),
     Type = ifelse(Type %in% c('Technology', 'Knowledge', 'Land deals'), 'Information', Type),
     Type = ifelse(Type %in% c('Virtual GHG emissions'), 'Virtual emissions', Type), 
-    Type = ifelse(Type %in% c('Social footprints/risks'), 'Social footprints', Type),
-    Type = ifelse(Type %in% c('Carbon', 'Pollutants/waste'), 'Pollutants', Type),
+    Type = ifelse(Type %in% c('Social footprints/risks'), 'Virtual SF', Type),
+    Type = ifelse(Type %in% c('Pollutants/waste'), 'Pollutants', Type),
     
   ) %>%
   dplyr::filter(!Type %in% c(
@@ -319,6 +329,7 @@ func_clean_levels <- function(data, target_col = "Levels") {
   ## clear text and add top category ----------------
   dplyr::mutate(
     Levels = gsub('and|And|\\.|\\-', '', Levels),
+    Levels = gsub('internationl|Internationl', 'International', Levels),
     Levels = trimws(Levels),
     Levels = Hmisc::capitalize(Levels),
   ) %>%
@@ -370,6 +381,8 @@ dt.bymhi.cl2 <- dt.bymhi.cl  %>%
     dimension = factor(dimension, levels = c('Type', 'type_top', 'Levels')),
     # layers = factor(layers, levels = org_levels)
     ) %>%
+  group_by(layers) %>%
+  dplyr::mutate(total = sum(freq, na.rm = T)) %>%
   as.data.frame()
   
 
@@ -394,10 +407,11 @@ library(RColorBrewer)
 colourCount = length(unique(dt.bymhi.cl2$layers))
 getPalette = colorRampPalette(brewer.pal(12, "Paired"))
  
-
+packageVersion('ggrepel')
 
 library(ggalluvial)
 width_my <- 1/2.5
+y_max <- sum(dt.bymhi.cl2$freq)/3
 
 
 dt.bymhi.cl2 %>%
@@ -406,8 +420,7 @@ dt.bymhi.cl2 %>%
            y = freq,
            alluvium = id_within_layers, 
            stratum = layers, 
-           fill = layers, 
-           label = layers)) +
+           fill = layers)) +
   scale_x_discrete(expand = c(.1, 0)) +
   # scale_fill_manual(values = getPalette(colourCount)) +
   # geom_flow(width = width_my) +
@@ -416,14 +429,51 @@ dt.bymhi.cl2 %>%
             decreasing = TRUE) +
   geom_stratum(alpha = .6, width = width_my, 
                decreasing = TRUE) +
-  stat_stratum(geom = "text", 
+  stat_stratum(geom = "text",
+               aes(label = ifelse(as.numeric(total) >= 10, layers, NA)),
                decreasing = TRUE) +
+  
   # geom_text(stat = "stratum", check_overlap = T,
+            # label = after_stat(stratum),
   #           # aes(label = paste0(stratum,
   #           #                    ifelse(nchar(as.character(stratum)) == 1L,
   #           #                           ": ", "\n"),
   #           #                    after_stat(n)))
   #           ) +
+  
+  # annotate(
+  #   geom = "curve", x = 1, y = y_max, xend = 1.1, yend = y_max+20, 
+  #   curvature = .3, arrow = arrow(length = unit(1, "mm"))
+  # ) +
+  # annotate(geom = "text", x = 1.11, y = y_max+20, label = "Virtual SF", hjust = "left", size=3) +
+  
+  ggrepel::geom_text_repel(
+    decreasing = TRUE,
+    aes(label = ifelse(as.numeric(total) < 10, as.character(layers), NA) ),
+    # segment.square  = F,
+    # segment.inflect = T,
+    segment.size    = 0.3,
+    segment.alpha   = .7,
+    segment.curvature = 0.2, ## negative for left-hand and positive for right-hand curves, 0 for straight lines
+    # segment.curvature = -1e-20,
+    segment.ncp = 3,
+    segment.angle = 20, ## values greater than 90 would skew toward the end
+    
+    nudge_x = .4,
+    nudge_y = .5,
+    
+    # point.padding = unit(30, "mm"),
+    force_pull = 1,
+    direction = 'both',
+    # direction = "y",
+    
+    # arrow = arrow(length = unit(1, "mm")),
+    
+    stat = "stratum",
+    size = 3
+  ) +
+
+
   theme_classic() +
   theme(legend.position = "none",
         axis.title  = element_blank(),
@@ -434,7 +484,7 @@ dt.bymhi.cl2 %>%
                                    margin = margin(t = 0, r = 0, b = 0, l = 0)))
 
 getwd()
-f <- 'FlowType_scale_pairs1.png'
+f <- paste0('FlowType_scale_pairs', today, '.png')
 fname <- paste0(dir.fig, f); fname
 ggsave(filename = fname, plot = last_plot(), width = 16/1.5, height = 10, units = 'in', dpi = 300)
 
