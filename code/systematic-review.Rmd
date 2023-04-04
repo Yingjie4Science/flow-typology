@@ -62,22 +62,47 @@ for (csv in fs) {
 
 
 
-```{r - to-do}
-```
-  [] deal with multiple coder's input, select whose? and select `Consensus`
-
-
-
-```{r - pre-processing }
+```{r - check consensus}
 dt <- dfs %>%
   dplyr::rename('id' = 'Covidence #') %>%
   dplyr::rename(Reviewer = `Reviewer Name`) %>%
   dplyr::rename("Levels" = "Organizational levels of analysis",
                 'Type' = 'Flow Type') 
 
-dt_ <- dt %>%
-  # arrange(desc(date)) %>%
+
+dt_check <- dt %>%
+  arrange(id, Reviewer, desc(date)) %>%
   dplyr::distinct(id, Reviewer, .keep_all = T) %>%
+  dplyr::select(1:5) %>%
+  group_by(id) %>%
+  add_count() %>%
+  # dplyr::filter(n == 3) %>%  ## passed `consensus`
+  dplyr::filter(n == 2) %>%    ## need `consensus`
+  as.data.frame()
+
+
+dd1 <- dt_check %>%
+  dplyr::distinct(id, Reviewer) %>%
+  arrange(id, Reviewer) %>% 
+  group_by(Reviewer) %>%
+  summarise(id = str_c(id, collapse = ", ") )
+
+
+dd2 <- aggregate(id ~ Reviewer, unique(dt_check), paste, collapse = ", ")
+  
+
+unique(dt_check$id)
+```
+
+
+```{r - pre-processing }
+dt_final <- dt %>%
+  ### - keep newest data and remove data in old dates
+  # group_by(id, Reviewer) %>%
+  arrange(id, Reviewer, desc(date)) %>%
+  # dplyr::distinct(id, Reviewer, .keep_all = T) %>%
+  ## - prioritize results by consensus 
+  dplyr::distinct(id, .keep_all = T) %>%
   
   ## - remove text within parenthesis 
   dplyr::mutate(
@@ -93,51 +118,64 @@ dt_ <- dt %>%
 
 # rm(d, dfs)
 
-dt_ <- dt_ %>%
+
+## manually fix this error
+dt_final <- dt_final %>%
   dplyr::mutate(
      Levels = ifelse(id=='305' & Reviewer=='Xin Lan', 'International; National', Levels),
   )
 
-names(dt_)
+names(dt_final)
 ```
 
 
 ```{r - check errors}
-dt_err <- dt_ %>%
+dt_err <- dt_final %>%
   # dplyr::filter(str_detect(Type, fixed('other', ignore_case = T))) %>%
   # dplyr::filter(str_detect(Type, fixed('Carbon', ignore_case = T))) %>% 
   # dplyr::filter(str_detect(Type, fixed('Virtual wood', ignore_case = T))) %>% # ''
   # dplyr::filter(str_detect(Type, fixed('Ecosystem services', ignore_case = T))) %>% 
-  # dplyr::filter(str_detect(Type, fixed('Policies', ignore_case = T))) %>% ## #267 by Nick
-  # dplyr::filter(str_detect(Type, fixed('Cultural practices', ignore_case = T))) %>% ## #93 by Nick
+  # dplyr::filter(str_detect(Type, fixed('Policies', ignore_case = T))) %>%               ## #267 by Nick
+  # dplyr::filter(str_detect(Type, fixed('Cultural practices', ignore_case = T))) %>%     ## #93 by Nick
   # dplyr::filter(str_detect(Type, fixed('Seafood', ignore_case = T))) %>% ##
-  dplyr::filter(str_detect(Type, fixed('Nitrogen', ignore_case = T))) %>% ## Nitrogen
+  # dplyr::filter(str_detect(Type, fixed('Nitrogen', ignore_case = T))) %>% ## Nitrogen
+  # dplyr::filter(str_detect(Type, fixed('Urbanization', ignore_case = T))) %>%           ## Xiang
+  dplyr::filter(str_detect(Type, fixed('Ecological', ignore_case = T))) %>%               ## Ecological 
   # dplyr::filter(str_detect(Levels, fixed('ecoregion', ignore_case = T))) %>% 
   # dplyr::filter(str_detect(Levels, fixed('Internationl', ignore_case = T))) %>% ## 
-  # dplyr::filter(is.na(`Data availability`)) %>% 
+  # dplyr::filter(is.na(`Data availability`)) %>%
   ## Policies
   as.data.frame()
 
 dt_err_ <- dt %>%
   # dplyr::filter(id == '320') %>%
-  dplyr::filter(id == '358') %>%
+  dplyr::filter(id == '134') %>%
   dplyr::distinct(id, .keep_all = T) %>%
   as.data.frame()
 ```
 
 
 
-### - to-do list
-
-* revise and then send for consensus
-  - #358 by Nan - "virtual wood products"
-  - #51, #682 - missing input for "Data availability"
+```{r - To-do}
+```
   
-
+  * Revise and then send for consensus
+  
+  [x] #358 by Nan - "virtual wood products"
+  [x] #51, #682 - missing input for "Data availability"
+  [x] #134 - missing input for "Data availability"
+  [x] deal with multiple coder's input, select whose? and select `Consensus`
+  [ ] Paper by two coders, but have not gone through `Consensus`
+  [ ] Too many 'local' scales? - need to double-check
+  
+  
 
 ## Proregss
 ```{r}
-dt_ %>%
+dt %>%
+  ### - keep old data and remove data in newest dates
+  # arrange(desc(date)) %>%
+  dplyr::distinct(id, Reviewer, .keep_all = T) %>%
   group_by(Reviewer, date) %>%
   tally() %>%
   add_count(Reviewer, wt = n, name = 'n_total') %>%
@@ -224,7 +262,7 @@ org_levels <- c("International", "National", "Subnational", "Local")
 
 ## stat
 ## - by Type
-dt.bymhi <- dt_ %>%
+dt.bymhi <- dt_final %>%
   group_by(Type, Levels) %>%
   dplyr::count() %>%
   ungroup() %>%
@@ -258,6 +296,7 @@ dt.bymhi.cl <- dt.bymhi %>%
     
     Type = ifelse(Type %in% c('Land requisition'), 'transfer ownership and use of land', Type),
     Type = ifelse(Type %in% c('Virtual nitrogen', 'Virtual phosphorus'), 'Virtual N/P', Type),
+    Type = ifelse(Type %in% c('Ecological footprints'), 'Virtual land', Type), # 
     Type = ifelse(Type %in% c('Seafood footprint', 'Virtual energy'), 'Virtual EF (other)', Type),
     Type = Hmisc::capitalize(Type),
     Type = ifelse(Type %in% c('Carbon', 'Nitrogen'), 'Pollutants/waste', Type),
@@ -283,7 +322,8 @@ dt.bymhi.cl <- dt.bymhi %>%
     
   ) %>%
   dplyr::filter(!Type %in% c(
-    'Other', 'Virtual wood products trade', 
+    'Other', 
+    'Virtual wood products trade', 
     'Policies',
     'Cultural practices',
     'Ecosystem services' ## overlapped with other input
@@ -304,7 +344,7 @@ dt.bymhi.clean <- dt.bymhi.cl  %>%
 
 ```{r - Levels, include=FALSE}
 ## - by scale
-dt.bylevel <- dt_ %>%
+dt.bylevel <- dt_final %>%
   ### -clean up the names of the tools
   # dplyr::select(1:5, Levels, -Title) %>%
   # dplyr::filter(nchar(Levels) < 180) %>%
@@ -378,7 +418,9 @@ dt.bymhi.cl2 <- dt.bymhi.cl  %>%
   arrange(dimension) %>%
   dplyr::rename(freq = n) %>%
   dplyr::mutate(
-    dimension = factor(dimension, levels = c('Type', 'type_top', 'Levels')),
+    dimension = factor(dimension, 
+                       levels = c('Type', 'type_top', 'Levels'), 
+                       labels = c('Flow examples', 'Flow type Categories', 'Levels')),
     # layers = factor(layers, levels = org_levels)
     ) %>%
   group_by(layers) %>%
@@ -484,9 +526,9 @@ dt.bymhi.cl2 %>%
                                    margin = margin(t = 0, r = 0, b = 0, l = 0)))
 
 getwd()
-f <- paste0('FlowType_scale_pairs', today, '.png')
+f <- paste0('FlowType_scale_pairs', today, '-1.png')
 fname <- paste0(dir.fig, f); fname
-ggsave(filename = fname, plot = last_plot(), width = 16/1.5, height = 10, units = 'in', dpi = 300)
+ggsave(filename = fname, plot = last_plot(), width = 10, height = 10, units = 'in', dpi = 300)
 
 ```
 
