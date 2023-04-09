@@ -30,6 +30,8 @@ dir.fig <- "./figures/"
 
 
 # Data import
+
+## Load data
 ```{r include=FALSE}
 getwd()
 
@@ -58,17 +60,63 @@ for (csv in fs) {
   dfs <- rbind(dfs, d)
   
 }
-```
 
 
-
-```{r - check consensus}
-dt <- dfs %>%
+dt_tracking <- dfs %>%
   dplyr::rename('id' = 'Covidence #') %>%
   dplyr::rename(Reviewer = `Reviewer Name`) %>%
   dplyr::rename("Levels" = "Organizational levels of analysis",
                 'Type' = 'Flow Type') 
 
+
+
+## load most updated data only 
+f <- fs[length(fs)]; f
+t <- basename(f) %>% gsub('review_299449_', '', .) %>%
+    str_sub(start = 1, end = 14)  %>%
+    as.POSIXct(.,format="%Y%m%d%H%M%S") 
+t
+
+dt <- readr::read_csv(file = f) %>%
+  dplyr::mutate(date = t) %>%
+  dplyr::rename('id' = 'Covidence #') %>%
+  dplyr::rename(Reviewer = `Reviewer Name`) %>%
+  dplyr::rename("Levels" = "Organizational levels of analysis",
+                'Type' = 'Flow Type') 
+```
+
+
+```{r - progress}
+dt_tracking %>%
+  ### - keep old data and remove data in newest dates
+  # arrange(desc(date)) %>%
+  dplyr::distinct(id, Reviewer, .keep_all = T) %>%
+  group_by(Reviewer, date) %>%
+  tally() %>%
+  add_count(Reviewer, wt = n, name = 'n_total') %>%
+  # dplyr::mutate(date = as.Date(date)) %>%
+  ggplot(aes(x = reorder(Reviewer, n_total), y = n, fill = date)) +
+  geom_col(show.legend = F) +
+  geom_text(aes(label = n), 
+            # vjust = 0.5, hjust = 0, 
+            position = position_stack(vjust = 0.5),
+            color = 'gray90') +
+  
+  geom_text(
+    aes(label = after_stat(y), group = Reviewer), 
+    stat = 'summary', fun = sum, vjust = .5, hjust = 0, color = 'red', fontface = 'bold', size = 5
+  ) +
+
+  xlab('') +
+  coord_flip() +
+  theme_bw()
+```
+
+
+
+
+
+```{r - check consensus}
 
 dt_check <- dt %>%
   arrange(id, Reviewer, desc(date)) %>%
@@ -80,6 +128,8 @@ dt_check <- dt %>%
   dplyr::filter(n == 2) %>%    ## need `consensus`
   as.data.frame()
 
+unique(dt_check$id)
+
 
 dd1 <- dt_check %>%
   dplyr::distinct(id, Reviewer) %>%
@@ -90,8 +140,7 @@ dd1 <- dt_check %>%
 
 dd2 <- aggregate(id ~ Reviewer, unique(dt_check), paste, collapse = ", ")
   
-
-unique(dt_check$id)
+dd2
 ```
 
 
@@ -140,18 +189,18 @@ dt_err <- dt_final %>%
   # dplyr::filter(str_detect(Type, fixed('Seafood', ignore_case = T))) %>% ##
   # dplyr::filter(str_detect(Type, fixed('Nitrogen', ignore_case = T))) %>% ## Nitrogen
   # dplyr::filter(str_detect(Type, fixed('Urbanization', ignore_case = T))) %>%           ## Xiang
-  dplyr::filter(str_detect(Type, fixed('Ecological', ignore_case = T))) %>%               ## Ecological 
+  # dplyr::filter(str_detect(Type, fixed('Ecological', ignore_case = T))) %>%             ## Ecological 
   # dplyr::filter(str_detect(Levels, fixed('ecoregion', ignore_case = T))) %>% 
   # dplyr::filter(str_detect(Levels, fixed('Internationl', ignore_case = T))) %>% ## 
-  # dplyr::filter(is.na(`Data availability`)) %>%
+  dplyr::filter(is.na(`Data availability`)) %>%
   ## Policies
   as.data.frame()
 
-dt_err_ <- dt %>%
-  # dplyr::filter(id == '320') %>%
-  dplyr::filter(id == '134') %>%
-  dplyr::distinct(id, .keep_all = T) %>%
-  as.data.frame()
+# dt_err_ <- dt %>%
+#   # dplyr::filter(id == '320') %>%
+#   dplyr::filter(id == '134') %>%
+#   dplyr::distinct(id, .keep_all = T) %>%
+#   as.data.frame()
 ```
 
 
@@ -165,37 +214,10 @@ dt_err_ <- dt %>%
   [x] #51, #682 - missing input for "Data availability"
   [x] #134 - missing input for "Data availability"
   [x] deal with multiple coder's input, select whose? and select `Consensus`
-  [ ] Paper by two coders, but have not gone through `Consensus`
+  [x] Paper that coded by two coders, are need to be gone through `Consensus`
   [ ] Too many 'local' scales? - need to double-check
   
   
-
-## Proregss
-```{r}
-dt %>%
-  ### - keep old data and remove data in newest dates
-  # arrange(desc(date)) %>%
-  dplyr::distinct(id, Reviewer, .keep_all = T) %>%
-  group_by(Reviewer, date) %>%
-  tally() %>%
-  add_count(Reviewer, wt = n, name = 'n_total') %>%
-  # dplyr::mutate(date = as.Date(date)) %>%
-  ggplot(aes(x = reorder(Reviewer, n_total), y = n, fill = date)) +
-  geom_col(show.legend = F) +
-  geom_text(aes(label = n), 
-            # vjust = 0.5, hjust = 0, 
-            position = position_stack(vjust = 0.5),
-            color = 'gray90') +
-  
-  geom_text(
-    aes(label = after_stat(y), group = Reviewer), 
-    stat = 'summary', fun = sum, vjust = .5, hjust = 0, color = 'red', fontface = 'bold', size = 5
-  ) +
-
-  xlab('') +
-  coord_flip() +
-  theme_bw()
-```
 
 
 
@@ -613,7 +635,7 @@ ggsave(filename = fname, plot = last_plot(), width = 16/1.5, height = 10, units 
 
 ```{r}
 dt.bymhi.clean %>%
-  dplyr::slice_max(order_by = n, n = 20) %>%
+  # dplyr::slice_max(order_by = n, n = 20) %>%
   ggplot(aes(
     x = reorder(Type, n),
     y = n,
@@ -644,13 +666,13 @@ dt.bylevel.clean %>%
   # dplyr::slice_max(order_by = n, n = 20) %>%
   # plot_freq(data = ., var = 'Levels') +
   ggplot(aes(
-    x = Levels,
+    x = reorder(Levels, n),
     y = n,
     # fill = type_top
   )) +
   geom_col() +
   # scale_x_reverse() +
-  scale_x_discrete(limits=rev) +
+  # scale_x_discrete(limits=rev) +
   
   coord_flip() +
   xlab("") +
