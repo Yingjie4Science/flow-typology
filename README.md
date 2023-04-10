@@ -1,6 +1,6 @@
 
 
-# Transboundary flows in the metacoupled Anthropocene: typology, methods, and governance for global sustainability
+# Transboundary flows in the metacoupled Anthropocene
 
 
 Contributors: Yingjie Li, Jianguo Liu, Nan Jia, Xiang Yu, Nicholas Manning, Xin Lan
