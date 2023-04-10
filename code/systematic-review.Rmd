@@ -146,6 +146,7 @@ dd2
 
 ```{r - pre-processing }
 dt_final <- dt %>%
+  dplyr::rename("Magnitude" = "Was the `Flow Magnitude` quantified?") %>%
   ### - keep newest data and remove data in old dates
   # group_by(id, Reviewer) %>%
   arrange(id, Reviewer, desc(date)) %>%
@@ -192,7 +193,8 @@ dt_err <- dt_final %>%
   # dplyr::filter(str_detect(Type, fixed('Ecological', ignore_case = T))) %>%             ## Ecological 
   # dplyr::filter(str_detect(Levels, fixed('ecoregion', ignore_case = T))) %>% 
   # dplyr::filter(str_detect(Levels, fixed('Internationl', ignore_case = T))) %>% ## 
-  dplyr::filter(is.na(`Data availability`)) %>%
+  # dplyr::filter(is.na(`Data availability`)) %>%
+  dplyr::filter(is.na(Magnitude)) %>%
   ## Policies
   as.data.frame()
 
@@ -271,6 +273,11 @@ plot_freq <- function(data, var = "Mental health Types") {
   
   return(p)
 }
+
+
+func_ggsave <- function(fname, w = 7, h = 5) {
+  ggsave(filename = fname, plot = last_plot(), width = w, height = h, units = "in", dpi = 300)
+}
 ```
 
 
@@ -284,7 +291,7 @@ org_levels <- c("International", "National", "Subnational", "Local")
 
 ## stat
 ## - by Type
-dt.bymhi <- dt_final %>%
+dt.type <- dt_final %>%
   group_by(Type, Levels) %>%
   dplyr::count() %>%
   ungroup() %>%
@@ -299,7 +306,7 @@ physical_flow_list <- c(
   
 
 ## - clean and format
-dt.bymhi.cl <- dt.bymhi %>%
+dt.type.cl <- dt.type %>%
   dplyr::mutate(
     Type = gsub("\\(e\\.g\\., land grab, land acquisition, land requisition\\)", "", Type),
     
@@ -332,7 +339,8 @@ dt.bymhi.cl <- dt.bymhi %>%
     
     ## rename flows
     Type = ifelse(Type %in% c('Cultural ecosystem services'), 'Cultural ES', Type),
-    Type = ifelse(Type %in% c('Goods and products', 'Energy'), 'Goods', Type),
+    Type = ifelse(Type %in% c('Goods and products', 'Energy'), 'Trade of goods', Type),
+    Type = gsub('raw materials', 'Trade of raw materials', Type, ignore.case=TRUE),
     Type = ifelse(Type %in% c('Financial/investments'), 'Financial', Type),
     Type = ifelse(Type %in% c('People'), 'Human', Type),
     Type = ifelse(Type %in% c('Sediment'), 'Water', Type),
@@ -353,15 +361,129 @@ dt.bymhi.cl <- dt.bymhi %>%
   as.data.frame()
   
   
-dt.bymhi.clean <- dt.bymhi.cl  %>%
+dt.type.clean <- dt.type.cl  %>%
   group_by(Type, type_top) %>%
   dplyr::summarise_at(c("n"), sum, na.rm = T) %>%
+  ungroup() %>%
+  dplyr::mutate(total = sum(n, na.rm = T),
+                percent = round(n/total*100, digits = 0),
+                percent_lab = paste0(percent, '%')
+                ) %>%
   arrange(type_top) %>%
   as.data.frame()
 ```
 
 
+```{r - Type - bar}
+dt.type.clean %>%
+  # dplyr::slice_max(order_by = n, n = 20) %>%
+  ggplot(aes(
+    x = reorder(Type, n),
+    y = n,
+    fill = type_top
+  )) +
+  geom_col() +
+  geom_text(
+    # aes(label = ifelse(as.numeric(percent) >= 5, percent_lab, NA)), 
+    aes(label = percent_lab), 
+    vjust = 0.5, 
+    hjust = -0.1
+  ) +
+  ylim(0, 185) +
+  xlab("") +
+  ylab("Number of studies") +
+  coord_flip() +
+  # scale_fill_distiller(name = '', palette = "Blues", guide = "colorbar", direction = 1) +
+  scale_fill_manual(values = type_top_colors, name = 'Categories') +
+  # ggtitle("Frequency of Flow Types") +
+  theme_bw() +
+  theme(
+    panel.grid = element_line(size = 0.2),
+    panel.grid.minor = element_blank(),
+    # axis.text.x = element_text(angle = 45, vjust = 1, hjust=1), 
+    axis.title.y = element_blank(),
+    legend.position = c(0.8, 0.15)
+    )
 
+fname <- paste0(dir.fig, "flow_types.png")
+func_ggsave(fname = fname)
+```
+
+
+
+```{r - Magnitude}
+dt.m <- dt_final %>%
+  ### - stat
+  group_by(Magnitude) %>%
+  dplyr::tally() %>%
+  ungroup() %>%
+  dplyr::filter(Magnitude != 'NA') %>% ## 4 of which have missing input
+  dplyr::mutate(total = sum(n, na.rm = T),
+                percent = n/total*100) %>%
+  as.data.frame()
+```
+
+
+```{r - Direction}
+dt.dir <- dt_final %>%
+  ### - stat
+  group_by(`Flow Directions`) %>%
+  dplyr::tally() %>%
+  ungroup() %>%
+  dplyr::filter(`Flow Directions` != 'NA') %>% ## 1 of which have missing input
+  dplyr::mutate(total = sum(n, na.rm = T),
+                percent = n/total*100) %>%
+  as.data.frame()
+```
+
+
+```{r - Distance}
+dt.dis <- dt_final %>%
+  ### - stat
+  dplyr::rename("Distance" = "Flow Distance") %>%
+  ## clear text and add top category ----------------
+  dplyr::mutate(
+    Distance = gsub("Other\\: ", "", Distance),
+    Distance = gsub("&", ";", Distance),
+    Distance = trimws(Distance),
+    Distance = Hmisc::capitalize(Distance),
+  ) %>%
+  expand_col_to_long(data = ., target_col = "Distance") %>%
+  group_by(Distance) %>%
+  dplyr::tally() %>%
+  ungroup() %>%
+  # dplyr::filter(Directions != 'NA') %>% ## 1 of which have missing input
+  dplyr::mutate(total = sum(n, na.rm = T),
+                percent = n/total*100) %>%
+  as.data.frame()
+```
+
+
+
+```{r - Mode}
+dt.mod <- dt_final %>%
+  ### - stat
+  dplyr::rename("Mode" = "Flow Mode") %>%
+  ## clear text and add top category ----------------
+  dplyr::mutate(
+    Mode = gsub("Other\\: ", "", Mode),
+    Mode = gsub('Carbon flow via tourism', "Active movement of people and animals", Mode, ignore.case = T), # 
+    Mode = gsub('Financial/Capital flows through banking or debt|Spatial subsidy values', "Financial flow", Mode, ignore.case = T),
+    Mode = gsub('Virtual water use', "Trade-related flows via Man-made carriers", Mode, ignore.case = T),
+    Mode = gsub('Ecosystem services flow', "Biophysical flow through ecological processes", Mode, ignore.case = T),# 
+    Mode = trimws(Mode),
+    Mode = Hmisc::capitalize(Mode),
+  ) %>%
+  expand_col_to_long(data = ., target_col = "Mode") %>%
+  group_by(Mode) %>%
+  dplyr::tally() %>%
+  ungroup() %>%
+  # dplyr::filter(Directions != 'NA') %>% ## 1 of which have missing input
+  dplyr::mutate(total = sum(n, na.rm = T),
+                percent = n/total*100) %>%
+  arrange(desc(percent)) %>%
+  as.data.frame()
+```
 
 
 ```{r - Levels, include=FALSE}
@@ -404,15 +526,20 @@ func_clean_levels <- function(data, target_col = "Levels") {
   
 }
 
-dt.bylevel.cl <- func_clean_levels(data = dt.bylevel) %>%
+
+dt.bylevel.cl <- dt.bylevel %>%
+  func_clean_levels(data = .) %>%
   group_by(Levels, `Data availability`) %>%
   dplyr::summarise_at(c("n"), sum, na.rm = T) %>%
   as.data.frame()
   
+unique(dt.bylevel.cl$Levels)
+unique(dt.bylevel.cl$`Data availability`)
   
 dt.bylevel.clean <- dt.bylevel.cl  %>%
   dplyr::mutate(
-    Levels = factor(Levels, levels = org_levels)
+    Levels = factor(Levels, levels = org_levels),
+    `Data availability` = factor(`Data availability`, levels = c("Low", "Moderate", "High")),
     ) %>%
   as.data.frame()
 
@@ -422,10 +549,37 @@ levels(dt.bylevel.clean$Levels)
 
 
 
+```{r - Level - bar}
+dt.bylevel.clean %>%
+  # dplyr::slice_max(order_by = n, n = 20) %>%
+  # plot_freq(data = ., var = 'Levels') +
+  ggplot(aes(
+    x = reorder(Levels, n),
+    y = n,
+    fill = `Data availability`
+  )) +
+  # geom_col() +
+  geom_bar(position="stack", stat="identity", width = .8, linewidth = .1, color = 'gray90') +
+  scale_fill_brewer(palette = 'Greys', direction = 1) +
+  coord_flip() +
+  # xlab("") +
+  ylab("Number of studies") +
+  ggtitle("Frequency of Organizational levels") +
+  theme_bw() +
+  theme(
+    legend.position = c(0.85, 0.15), 
+    axis.title.y = element_blank(),
+    )
+
+fname <- paste0(dir.fig, "flow_org_levels.png")
+func_ggsave(fname = fname)
+```
+
+
 
 
 ```{r - Type + Levels}
-dt.bymhi.cl2 <- dt.bymhi.cl  %>%
+dt.type.cl2 <- dt.type.cl  %>%
   # expand_col_to_long(data = ., target_col = "Levels") %>%
   func_clean_levels(data = .) %>%
   group_by(type_top, Type, Levels) %>%
@@ -441,8 +595,8 @@ dt.bymhi.cl2 <- dt.bymhi.cl  %>%
   dplyr::rename(freq = n) %>%
   dplyr::mutate(
     dimension = factor(dimension, 
-                       levels = c('Type', 'type_top', 'Levels'), 
-                       labels = c('Flow examples', 'Flow type Categories', 'Levels')),
+                       levels = c('type_top', 'Type', 'Levels'), 
+                       labels = c('Flow type Categories', 'Flow examples', 'Levels')),
     # layers = factor(layers, levels = org_levels)
     ) %>%
   group_by(layers) %>%
@@ -451,34 +605,34 @@ dt.bymhi.cl2 <- dt.bymhi.cl  %>%
   
 
 
-str(dt.bymhi.cl2)
+str(dt.type.cl2)
 
-dt.bymhi.clean_sort <- dt.bymhi.clean %>%
+dt.type.clean_sort <- dt.type.clean %>%
   group_by(type_top) %>%
   arrange(type_top, n)
-str(dt.bymhi.clean)
-dt.bymhi.clean_sort$Type
+str(dt.type.clean)
+dt.type.clean_sort$Type
 
-sort_by <- c(dt.bymhi.clean_sort$Type, levels(dt.bymhi.clean_sort$type_top), org_levels)
+sort_by <- c(dt.type.clean_sort$Type, levels(dt.type.clean_sort$type_top), org_levels)
   
-dt.bymhi.cl3 <- dt.bymhi.cl2 %>%
+dt.type.cl3 <- dt.type.cl2 %>%
   dplyr::mutate(
     layers = factor(layers, levels = sort_by),
     )
 
 
 library(RColorBrewer)
-colourCount = length(unique(dt.bymhi.cl2$layers))
+colourCount = length(unique(dt.type.cl2$layers))
 getPalette = colorRampPalette(brewer.pal(12, "Paired"))
  
 packageVersion('ggrepel')
 
 library(ggalluvial)
 width_my <- 1/2.5
-y_max <- sum(dt.bymhi.cl2$freq)/3
+y_max <- sum(dt.type.cl2$freq)/3
 
 
-dt.bymhi.cl2 %>%
+dt.type.cl2 %>%
   ggplot(.,
        aes(x = dimension, 
            y = freq,
@@ -548,7 +702,7 @@ dt.bymhi.cl2 %>%
                                    margin = margin(t = 0, r = 0, b = 0, l = 0)))
 
 getwd()
-f <- paste0('FlowType_scale_pairs', today, '-1.png')
+f <- paste0('FlowType_scale_pairs', today, '-2.png')
 fname <- paste0(dir.fig, f); fname
 ggsave(filename = fname, plot = last_plot(), width = 10, height = 10, units = 'in', dpi = 300)
 
@@ -558,7 +712,7 @@ ggsave(filename = fname, plot = last_plot(), width = 10, height = 10, units = 'i
 aes.bind_my <- "flows"
 # aes.bind_my <- "alluvia"
 
-dt.bymhi.cl2 %>%
+dt.type.cl2 %>%
   ggplot(.,
        aes(x = dimension, 
            y = freq,
@@ -596,7 +750,7 @@ ggsave(filename = fname, plot = last_plot(), width = 16/1.5, height = 10, units 
 
 
 ```{r - test 2, eval=FALSE, include=FALSE}
-dt.bymhi.cl3 %>%
+dt.type.cl3 %>%
   ggplot(.,
        aes(x = dimension, 
            y = freq,
@@ -629,58 +783,5 @@ ggsave(filename = fname, plot = last_plot(), width = 16/1.5, height = 10, units 
 
 
 
-# Viz
-
-## Count by Type
-
-```{r}
-dt.bymhi.clean %>%
-  # dplyr::slice_max(order_by = n, n = 20) %>%
-  ggplot(aes(
-    x = reorder(Type, n),
-    y = n,
-    fill = type_top
-  )) +
-  geom_col() +
-  
-  coord_flip() +
-  # scale_fill_distiller(name = '', palette = "Blues", guide = "colorbar", direction = 1) +
-  scale_fill_manual(values = type_top_colors, name = 'Categories') +
-  xlab("") +
-  ggtitle("Frequency of Flow Types") +
-  theme_bw() +
-  theme(
-    # axis.text.x = element_text(angle = 45, vjust = 1, hjust=1), 
-    legend.position = c(0.8, 0.15)
-    )
-
-fname <- paste0(dir.fig, "flow_types.png")
-# ggsave(filename = fname, plot = last_plot(), width = 16 / 3, height = 9 / 3, units = "in", dpi = 300, bg = NULL)
-```
-
-
-## Count by tool
-
-```{r}
-dt.bylevel.clean %>%
-  # dplyr::slice_max(order_by = n, n = 20) %>%
-  # plot_freq(data = ., var = 'Levels') +
-  ggplot(aes(
-    x = reorder(Levels, n),
-    y = n,
-    # fill = type_top
-  )) +
-  geom_col() +
-  # scale_x_reverse() +
-  # scale_x_discrete(limits=rev) +
-  
-  coord_flip() +
-  xlab("") +
-  theme_bw() +
-  ggtitle("Frequency of Organizational levels")
-
-fname <- paste0(dir.fig, "org_levels.png")
-# ggsave(filename = fname, plot = last_plot(), width = 16 / 2, height = 9 / 2, units = "in", dpi = 300, bg = NULL)
-```
 
 
