@@ -206,6 +206,14 @@ dt_err <- dt_final %>%
 ```
 
 
+```{r - subset - water}
+#' to see how many studies are on groundwater
+#' 
+subset_df <- dt_final %>%
+  dplyr::mutate(Type = gsub('virtual water', '', Type)) %>%
+  dplyr::filter(str_detect(Type, fixed('water', ignore_case=TRUE)))
+```
+
 
 ```{r - To-do}
 ```
