@@ -12,6 +12,6 @@ Contributors: Yingjie Li, Jianguo Liu, Nan Jia, Xiang Yu, Nicholas Manning, Xin 
 
 
 <p align="center">
-  <img src="./docs/global_connection_Background_dreamAI.jpg"/>
+  <img src="./docs/global_connection_Background_dreamAI.jpg", height = 450/>
 </p>
 
