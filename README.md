@@ -1,4 +1,7 @@
 
+[![Google Scholar Badge](https://img.shields.io/badge/Google-Scholar-lightgrey)](https://scholar.google.com/citations?user=uVeP2xAAAAAJ&hl=en)
+[![ResearchGate](https://img.shields.io/badge/ResearchGate-my?logoColor=00CCBB&color=00CCBB)](https://www.researchgate.net/profile/Yingjie-Li-7)
+![Visitor Badge](https://visitor-badge.laobi.icu/badge?page_id=Yingjie4Science.flow-typology)
 
 # Transboundary flows in the metacoupled Anthropocene
 
