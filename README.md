@@ -14,8 +14,9 @@ Contributors: [Yingjie Li](https://github.com/Yingjie4Science), Nan Jia, Xiang Y
 
 <p align="center">
   <img src="./docs/global_connection_Background_dreamAI.jpg", height = 450/>
+  
+  *AI-generated image*
 </p>
-*AI -generated image*
 
 
 **Media coverage**: https://www.canr.msu.edu/news/going-with-and-understanding-flow-key-to-sustainability
